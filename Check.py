@@ -8,7 +8,7 @@ parser = argparse.ArgumentParser()
 
 
 #přidání příkazů
-def AddArguments():
+def SetupArguments():
     parser.add_argument(
         "init",
         action="store_true",
@@ -36,7 +36,7 @@ def AddArguments():
 
 
 #použití argumentů
-def main ():
+def HandleArguments():
     if args.name:  
         print(f"Ahoj, {args.name}!")
     elif args.init:
@@ -58,7 +58,8 @@ def main ():
     else:
         print("Použijte příkaz -h pro nápovědu.")   
 
-AddArguments()
+#zavolání funkcí
+SetupArguments()
 args = parser.parse_args()        
-main()
+HandleArguments()
 
