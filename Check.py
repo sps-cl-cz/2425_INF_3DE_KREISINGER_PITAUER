@@ -42,6 +42,7 @@ def LoadTrackedFiles(fileName):
                 tracked_file, hash_value = line.strip().split(",", 1)
                 tracked_files[tracked_file] = hash_value
     return tracked_files
+
 def AddFilesToTracking(fileName, file_path,tracked_files):
     with open(fileName, "a") as file:
             for file_path in args.files:
@@ -55,6 +56,7 @@ def AddFilesToTracking(fileName, file_path,tracked_files):
                         print(f"File '{file_path}' added to tracking.")
                 else:
                     print(f"File '{file_path}' does not exist. Skipping.")
+
 def RemoveFilesFromTracking(fileName, file_path, tracked_files):
         files_to_remove = args.files
         removed_any = False
@@ -74,6 +76,31 @@ def RemoveFilesFromTracking(fileName, file_path, tracked_files):
                     file.write(f"{tracked_file},{hash_value}\n")
         else:
             print("No files were removed.")
+
+    #kontrola statusu vytvořených hashů
+def CheckStatus(fileName):
+    if not os.path.exists(fileName):
+        print(f"Tracking file '{fileName}' does not exist. Run 'init' to create it first.")
+        return
+
+    tracked_files = LoadTrackedFiles(fileName)
+    summary = {'OK': 0, 'CHANGE': 0, 'ERROR': 0}
+
+    for file_path, info in tracked_files.items():
+        if os.path.exists(file_path):
+            current_hash = HashSha1(file_path)
+            if current_hash == info:
+                print(f"[OK] {info} {file_path}")
+                summary['OK'] += 1
+            else:
+                print(f"[CHANGE] {info} {file_path} and NEW HASH: {current_hash}")
+                summary['CHANGE'] += 1
+        else:
+            print(f"[ERROR] File not found: {file_path}")
+            summary['ERROR'] += 1
+
+    print(f"Summary: {summary['OK']} OK, {summary['CHANGE']} CHANGE, {summary['ERROR']} ERROR")
+
 
 def HandleArguments(args):
     fileName = ".check"
@@ -96,7 +123,9 @@ def HandleArguments(args):
         tracked_files = LoadTrackedFiles(fileName)
         RemoveFilesFromTracking(fileName, args.files, tracked_files)
     elif args.command == "status":
-        pass
+        if FileExist(fileName) == False:
+            return
+        CheckStatus(fileName)
     else:
         print("Use the -h option for help.")
 
