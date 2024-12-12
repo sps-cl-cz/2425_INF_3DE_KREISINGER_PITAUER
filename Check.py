@@ -1,10 +1,9 @@
 import argparse
 import hashlib
-import glob
 import os
 import datetime
 
-#function to hash a file
+# Funkce pro získání hash souboru
 def HashSha1(Path):
     sha1_hash = hashlib.sha1()
     with open(Path, "rb") as f:
@@ -12,6 +11,7 @@ def HashSha1(Path):
             sha1_hash.update(byte_block)
     return sha1_hash.hexdigest()
 
+# Funkce pro nastavení argumentů init, add, remove, status
 def SetupArguments():
     parser = argparse.ArgumentParser()
     
@@ -29,11 +29,14 @@ def SetupArguments():
     
     return parser
 
+# Funkce pro kontrolu existence souboru
 def FileExist(fileName):
     if not os.path.exists(fileName):
         print(f"Tracking file '{fileName}' does not exist. Run 'init' to create it first.")
         return False
-    
+    return True
+
+# Funkce pro načtení sledovaných souborů
 def LoadTrackedFiles(fileName):
     tracked_files = {}
     if os.path.exists(fileName):
@@ -43,57 +46,66 @@ def LoadTrackedFiles(fileName):
                 tracked_files[tracked_file] = hash_value
     return tracked_files
 
-def AddFilesToTracking(fileName, file_path,tracked_files):
+# Funkce pro přidání souborů ze sledování
+def AddFilesToTracking(fileName, tracked_files, args):
     with open(fileName, "a") as file:
-            for file_path in args.files:
-                if os.path.exists(file_path):
-                    file_hash = HashSha1(file_path)
-                    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    if file_path in tracked_files:
-                        print(f"File '{file_path}' is already tracked.")
-                    else:
-                        file.write(f"{file_path},{file_hash},{timestamp}\n")
-                        print(f"File '{file_path}' added to tracking.")
+        for file_path in args.files:
+            if os.path.exists(file_path):
+                rel_path = os.path.relpath(file_path, os.getcwd())
+                file_hash = HashSha1(file_path)
+                timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                if rel_path in tracked_files:
+                    print(f"File '{rel_path}' is already tracked.")
                 else:
-                    print(f"File '{file_path}' does not exist. Skipping.")
-
-def RemoveFilesFromTracking(fileName, file_path, tracked_files):
-        files_to_remove = args.files
-        removed_any = False
-
-        for file_path in files_to_remove:
-            if file_path in tracked_files:
-                del tracked_files[file_path]
-                print(f"File '{file_path}' removed from tracking.")
-                removed_any = True
+                    file.write(f"{rel_path},{file_hash},{timestamp}\n")
+                    print(f"File '{rel_path}' added to tracking.")
             else:
-                print(f"File '{file_path}' is not currently tracked.")
+                print(f"File '{file_path}' does not exist. Skipping.")
 
-        # Přepsání sledovacího souboru, pokud byl některý soubor odstraněn
-        if removed_any:
-            with open(fileName, "w") as file:
-                for tracked_file, hash_value in tracked_files.items():
-                    file.write(f"{tracked_file},{hash_value}\n")
+# Funkce pro odstranění souborů ze sledování
+def RemoveFilesFromTracking(fileName, tracked_files, args):
+    files_to_remove = args.files
+    removed_any = False
+
+    for file_path in files_to_remove:
+        rel_path = os.path.relpath(file_path, os.getcwd())
+        if rel_path in tracked_files:
+            del tracked_files[rel_path]
+            print(f"File '{rel_path}' removed from tracking.")
+            removed_any = True
         else:
-            print("No files were removed.")
+            print(f"File '{rel_path}' is not currently tracked.")
 
-    #kontrola statusu vytvořených hashů
+    if removed_any:
+        with open(fileName, "w") as file:
+            for tracked_file, hash_value in tracked_files.items():
+                file.write(f"{tracked_file},{hash_value}\n")
+    else:
+        print("No files were removed.")
+
+# Funkce pro kontrolu statusu
 def CheckStatus(fileName):
     if not os.path.exists(fileName):
         print(f"Tracking file '{fileName}' does not exist. Run 'init' to create it first.")
         return
 
-    tracked_files = LoadTrackedFiles(fileName)
+    tracked_files = {}
+    with open(fileName, "r") as file:
+        for line in file:
+            tracked_file, hash_value, timestamp = line.strip().split(",", 2)
+            tracked_files[tracked_file] = {"hash": hash_value, "timestamp": timestamp}
+
     summary = {'OK': 0, 'CHANGE': 0, 'ERROR': 0}
 
     for file_path, info in tracked_files.items():
         if os.path.exists(file_path):
             current_hash = HashSha1(file_path)
-            if current_hash == info:
-                print(f"[OK] {info} {file_path}")
+
+            if current_hash == info["hash"]:
+                print(f"[OK] {info['hash']} {file_path}")
                 summary['OK'] += 1
             else:
-                print(f"[CHANGE] {info} {file_path} and NEW HASH: {current_hash}")
+                print(f"[CHANGE] {info['hash']} {file_path} (Last modified: and NEW HASH: {current_hash}")
                 summary['CHANGE'] += 1
         else:
             print(f"[ERROR] File not found: {file_path}")
@@ -101,35 +113,37 @@ def CheckStatus(fileName):
 
     print(f"Summary: {summary['OK']} OK, {summary['CHANGE']} CHANGE, {summary['ERROR']} ERROR")
 
-
-def HandleArguments(args):
-    fileName = ".check"
+# Funkce pro zpracování argumentů
+def HandleArguments(args, filename):
     if args.command == "init":
-        if os.path.exists(fileName):
-            os.remove(fileName)
-            print(f"Existing file '{fileName}' has been removed.")
-        with open(fileName, "w") as file:
+        if os.path.exists(filename):
+            os.remove(filename)
+            print(f"Existing file '{filename}' has been removed.")
+        with open(filename, "w") as file:
             pass
-        print(f"New file '{fileName}' has been successfully created.")
+        print(f"New file '{filename}' has been successfully created.")
     elif args.command == "add":
-        if FileExist(fileName) == False:
+        if not FileExist(filename):
             return
-        tracked_files = LoadTrackedFiles(fileName)
-        AddFilesToTracking(fileName, args.files, tracked_files)
-        
+        tracked_files = LoadTrackedFiles(filename)
+        AddFilesToTracking(filename, tracked_files, args)
     elif args.command == "remove":
-        if FileExist(fileName) == False:
+        if not FileExist(filename):
             return
-        tracked_files = LoadTrackedFiles(fileName)
-        RemoveFilesFromTracking(fileName, args.files, tracked_files)
+        tracked_files = LoadTrackedFiles(filename)
+        RemoveFilesFromTracking(filename, tracked_files, args)
     elif args.command == "status":
-        if FileExist(fileName) == False:
+        if not FileExist(filename):
             return
-        CheckStatus(fileName)
+        CheckStatus(filename)
     else:
         print("Use the -h option for help.")
 
-if __name__ == "__main__":
-    parser = SetupArguments()
-    args = parser.parse_args()
-    HandleArguments(args)
+# Funkce pro spuštění programu
+def Main():
+    if __name__ == "__main__":
+        parser = SetupArguments()
+        args = parser.parse_args()
+        HandleArguments(args, ".check")
+
+Main()
